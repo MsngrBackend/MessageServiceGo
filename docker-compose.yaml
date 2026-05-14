@@ -49,5 +49,5 @@ volumes:
   postgres_data:
 
 networks:
-  msngr-network:
+  msngr2-network:
     # external: true
