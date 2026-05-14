@@ -1,9 +1,8 @@
-package main
+package ws
 
 import (
 	"encoding/json"
 	"log"
-	"net/http"
 	"strconv"
 	"sync"
 
@@ -36,8 +35,8 @@ type OutgoingMessage struct {
 // ConnectionManager хранит активные WebSocket-соединения в виде:
 // map[chat_id]map[user_id]*websocket.Conn
 type ConnectionManager struct {
-	mu                 sync.RWMutex
-	activeConnections  map[int]map[string]*websocket.Conn
+	mu                sync.RWMutex
+	activeConnections map[int]map[string]*websocket.Conn
 }
 
 func NewConnectionManager() *ConnectionManager {
@@ -134,7 +133,7 @@ var manager = NewConnectionManager()
 
 // wsHandler обрабатывает входящие WebSocket-соединения.
 // Ожидает query-параметры: chat_id и user_id.
-func wsHandler(ws *websocket.Conn) {
+func WsHandler(ws *websocket.Conn) {
 	r := ws.Request()
 
 	chatIDStr := r.URL.Query().Get("chat_id")
@@ -171,15 +170,5 @@ func wsHandler(ws *websocket.Conn) {
 		default:
 			log.Printf("Unknown event type from user %s: %s", userID, event.Type)
 		}
-	}
-}
-
-func main() {
-	http.Handle("/ws/chat", websocket.Handler(wsHandler))
-
-	addr := ":8080"
-	log.Printf("WebSocket server listening on %s", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Fatalf("Server error: %v", err)
 	}
 }
