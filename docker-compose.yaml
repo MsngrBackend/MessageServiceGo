@@ -45,9 +45,27 @@ services:
     networks:
       - msngr-network
 
+  encryption:
+    container_name: encryption-service
+    build:
+      context: ../EncryptionService
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env
+    environment:
+      ENCRYPTION_SERVICE_ADDR: ${ENCRYPTION_SERVICE_ADDR:-:8081}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - msngr-network
+
 volumes:
   postgres_data:
 
 networks:
-  msngr2-network:
+  msngr-network:
     # external: true

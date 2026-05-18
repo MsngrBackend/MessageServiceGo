@@ -27,6 +27,7 @@ Swagger/OpenAPI в текущей версии не подключен.
 |---|---|---|
 | `DATABASE_URL` | `postgres://postgres:ultramegasecret@localhost:5432/messaging_db` | Подключение к PostgreSQL |
 | `NATS_URL` | `nats://localhost:4222` | Подключение к NATS |
+| `ENCRYPTION_SERVICE_ADDR` | `:8081` | HTTP-адрес EncryptionService |
 
 Пример `.env` для запуска через Docker Compose:
 
@@ -36,6 +37,7 @@ POSTGRES_PASSWORD=ultramegasecret
 POSTGRES_DB=messaging_db
 DATABASE_URL=postgres://postgres:ultramegasecret@postgres:5432/messaging_db
 NATS_URL=nats://nats:4222
+ENCRYPTION_SERVICE_ADDR=:8081
 ```
 
 ## Запуск через Docker Compose
@@ -57,6 +59,7 @@ docker compose ps
 Ожидаемые контейнеры:
 
 - `message-service`
+- `encryption-service`
 - `messaging_postgres`
 - `msngr_nats`
 
@@ -402,3 +405,93 @@ Payload:
   "online": true
 }
 ```
+
+## EncryptionService
+
+EncryptionService запускается отдельным HTTP-сервисом:
+
+```text
+http://localhost:8081
+```
+
+Код сервиса вынесен в соседний проект:
+
+```text
+E:\My Programs\Msngr\EncryptionService
+```
+
+Сервис сделан легким: он хранит публичные X25519-ключи пользователей и формирует зашифрованные конверты сообщений в формате `nacl-box-x25519-xsalsa20-poly1305-sealed-v1`.
+
+Важное ограничение E2E: приватные ключи не должны попадать в EncryptionService или MessageService. Для строгого end-to-end шифрования клиент генерирует пару ключей локально, регистрирует только публичный ключ, шифрует сообщение для участников чата и отправляет в `MessageServiceGo` уже зашифрованный `content`.
+
+### Healthcheck
+
+```http
+GET /health
+```
+
+### Зарегистрировать публичный ключ
+
+`public_key` — base64 от 32 байт X25519 public key.
+
+```http
+POST /keys/
+Content-Type: application/json
+```
+
+```json
+{"user_id":"user1","public_key":"base64-encoded-32-byte-key"}
+```
+
+### Получить публичный ключ
+
+```http
+GET /keys/{user_id}/
+```
+
+### Получить ключи нескольких пользователей
+
+```http
+POST /keys/lookup/
+Content-Type: application/json
+```
+
+```json
+{"user_ids":["user1","user2"]}
+```
+
+### Зашифровать сообщение для получателей
+
+Endpoint может использовать публичные ключи из хранилища или ключи, переданные прямо в `recipients`.
+
+```http
+POST /messages/encrypt/
+Content-Type: application/json
+```
+
+```json
+{
+  "content": "hello",
+  "recipients": [
+    {"user_id": "user1"},
+    {"user_id": "user2", "public_key": "base64-encoded-32-byte-key"}
+  ]
+}
+```
+
+Ответ:
+
+```json
+{
+  "version": "nacl-box-x25519-xsalsa20-poly1305-sealed-v1",
+  "envelopes": [
+    {
+      "user_id": "user1",
+      "algorithm": "nacl-box-x25519-xsalsa20-poly1305-sealed-v1",
+      "ciphertext": "base64-ciphertext"
+    }
+  ]
+}
+```
+
+Для хранения в `messages.content` можно передавать JSON с `version` и `envelopes` как строку. MessageService при этом не расшифровывает payload и остается простым транспортом/хранилищем сообщений.
