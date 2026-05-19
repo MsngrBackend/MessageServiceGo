@@ -19,6 +19,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d messaging_db"]
       interval: 5s
@@ -31,32 +32,15 @@ services:
     container_name: message-service
     build: .
     ports:
-      - "8080:8080"
+      - "8000:8080"
     env_file:
       - .env
     environment:
       NATS_URL: ${NATS_URL:-nats://nats:4222}
+      ENCRYPTION_SERVICE_ADDR: ${ENCRYPTION_SERVICE_ADDR:-encryption-service:8081}
     depends_on:
       nats:
         condition: service_started
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - msngr-network
-
-  encryption:
-    container_name: encryption-service
-    build:
-      context: ../EncryptionService
-      dockerfile: Dockerfile
-    ports:
-      - "8081:8081"
-    env_file:
-      - .env
-    environment:
-      ENCRYPTION_SERVICE_ADDR: ${ENCRYPTION_SERVICE_ADDR:-:8081}
-    depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
@@ -68,4 +52,4 @@ volumes:
 
 networks:
   msngr-network:
-    # external: true
+    external: true
